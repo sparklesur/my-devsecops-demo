@@ -1,0 +1,45 @@
+name: DevSecOps Security Scan
+
+on: [push, pull_request]
+
+jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # === SAST: 扫描 Python 代码 ===
+      - name: Run Semgrep (SAST)
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: "p/python"
+
+      # === SCA: 扫描 Python 依赖漏洞 ===
+      - name: Run Trivy (SCA for dependencies)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: "fs"
+          ignore-unfixed: true
+          format: "table"
+          output: "/dev/stdout"
+          severity: "CRITICAL,HIGH"
+
+      # === IaC Scan: 扫描 Terraform ===
+      - name: Run Checkov (IaC Security)
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: ./
+          framework: "terraform"
+          soft_fail: true  # 即使有漏洞也继续运行（方便学习）
+
+      # === Container Scan: 构建并扫描 Docker 镜像 ===
+      - name: Build Docker image
+        run: docker build -t my-app .
+
+      - name: Run Trivy (Container Scan)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'my-app'
+          format: 'table'
+          severity: 'CRITICAL,HIGH'
